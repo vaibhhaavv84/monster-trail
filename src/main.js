@@ -2,6 +2,16 @@
 
 const Engine = window.RiftEngine;
 if (!Engine) throw new Error("RiftEngine failed to load.");
+const Catalog = window.RiftCatalog;
+if (!Catalog) throw new Error("RiftCatalog failed to load.");
+
+const { CHARACTERS, SUPPLIES, WEAPONS } = Catalog;
+const PROFILE_KEY = "riftward-profile-v2";
+const DEFAULT_PROFILE = {
+  tokens: 180,
+  ownedWeapons: ["arc-needle"],
+  highScores: []
+};
 
 const canvas = document.querySelector("#game");
 const ctx = canvas.getContext("2d");
@@ -17,21 +27,45 @@ const newRunButton = document.querySelector("#newRunButton");
 const sideRunButton = document.querySelector("#sideRunButton");
 const soundButton = document.querySelector("#soundButton");
 const helpButton = document.querySelector("#helpButton");
+const shopButton = document.querySelector("#shopButton");
+const scoresButton = document.querySelector("#scoresButton");
+const nextFloorButton = document.querySelector("#nextFloorButton");
+const gateActionButton = document.querySelector("#gateActionButton");
+const gatePrompt = document.querySelector("#gatePrompt");
+const gatePromptText = document.querySelector("#gatePromptText");
+const characterRoster = document.querySelector("#characterRoster");
+const selectionSummary = document.querySelector("#selectionSummary");
+const operatorChip = document.querySelector("#operatorChip");
+const operatorPortrait = document.querySelector("#operatorPortrait");
+const operatorName = document.querySelector("#operatorName");
 const helpDialog = document.querySelector("#helpDialog");
 const closeHelpButton = document.querySelector("#closeHelpButton");
+const shopDialog = document.querySelector("#shopDialog");
+const closeShopButton = document.querySelector("#closeShopButton");
+const shopGrid = document.querySelector("#shopGrid");
+const shopTokensValue = document.querySelector("#shopTokensValue");
+const shopMessage = document.querySelector("#shopMessage");
+const weaponsTabButton = document.querySelector("#weaponsTabButton");
+const suppliesTabButton = document.querySelector("#suppliesTabButton");
+const scoreDialog = document.querySelector("#scoreDialog");
+const closeScoreButton = document.querySelector("#closeScoreButton");
+const resetScoresButton = document.querySelector("#resetScoresButton");
+const currentRunScore = document.querySelector("#currentRunScore");
+const highScoreList = document.querySelector("#highScoreList");
 const fieldLog = document.querySelector("#fieldLog");
 
 const ui = {
   healthFill: document.querySelector("#healthFill"),
   healthText: document.querySelector("#healthText"),
   floorValue: document.querySelector("#floorValue"),
+  characterValue: document.querySelector("#characterValue"),
   weaponValue: document.querySelector("#weaponValue"),
   damageValue: document.querySelector("#damageValue"),
   rangeValue: document.querySelector("#rangeValue"),
   ammoValue: document.querySelector("#ammoValue"),
   armorValue: document.querySelector("#armorValue"),
   pulseValue: document.querySelector("#pulseValue"),
-  creditsValue: document.querySelector("#creditsValue"),
+  tokensValue: document.querySelector("#tokensValue"),
   levelValue: document.querySelector("#levelValue"),
   sectorName: document.querySelector("#sectorName"),
   modeLabel: document.querySelector("#modeLabel"),
@@ -39,7 +73,12 @@ const ui = {
   objectiveText: document.querySelector("#objectiveText"),
   turnValue: document.querySelector("#turnValue"),
   killsValue: document.querySelector("#killsValue"),
+  floorScoreValue: document.querySelector("#floorScoreValue"),
+  rankValue: document.querySelector("#rankValue"),
   scoreValue: document.querySelector("#scoreValue"),
+  comboValue: document.querySelector("#comboValue"),
+  bestScoreValue: document.querySelector("#bestScoreValue"),
+  tokensEarnedValue: document.querySelector("#tokensEarnedValue"),
   enemyCount: document.querySelector("#enemyCount")
 };
 
@@ -64,13 +103,6 @@ const floorThemes = [
   { floorA: "#243525", floorB: "#2b3d2c", line: "#405842", wallA: "#60765d", wallB: "#465a45", glow: "#92dc82" },
   { floorA: "#34283d", floorB: "#3b2d46", line: "#5a4167", wallA: "#745e7e", wallB: "#55435e", glow: "#d879b5" },
   { floorA: "#293035", floorB: "#30383d", line: "#48545b", wallA: "#6d777d", wallB: "#505b61", glow: "#efc65b" }
-];
-
-const weapons = [
-  { name: "Arc Needle", min: 4, max: 7, range: 5, magazine: 8, color: "#62d8d0" },
-  { name: "Suncoil", min: 6, max: 10, range: 6, magazine: 7, color: "#efc65b" },
-  { name: "Prism Lance", min: 8, max: 13, range: 7, magazine: 5, color: "#d879b5" },
-  { name: "Bloom Cannon", min: 10, max: 16, range: 5, magazine: 9, color: "#ef765f" }
 ];
 
 const enemyCatalog = {
@@ -121,11 +153,11 @@ const enemyCatalog = {
   }
 };
 
-const pickupKinds = ["credits", "ammo", "patch", "armor", "pulse"];
+const pickupKinds = ["tokens", "ammo", "patch", "armor", "pulse"];
 
 const state = {
-  phase: "briefing",
-  overlayMode: "briefing",
+  phase: "selection",
+  overlayMode: "selection",
   sideMission: false,
   maxFloor: 6,
   floor: 1,
@@ -142,17 +174,82 @@ const state = {
   exitUnlocked: false,
   auto: false,
   audio: true,
-  stats: { turns: 0, kills: 0, score: 0 },
+  selectedCharacterId: "mara",
+  runWeapons: new Set(),
+  shopTab: "weapons",
+  profile: loadProfile(),
+  stats: createRunStats(),
   camera: { x: canvas.width / 2, y: 120, ready: false },
   shakeUntil: 0,
-  nextEntityId: 1
+  nextEntityId: 1,
+  lastBlockedMessageAt: 0,
+  scoreCommitted: false
 };
 
 let audioContext = null;
 let lastFrameTime = performance.now();
 
-function copyWeapon(tier) {
-  return { ...weapons[Math.max(0, Math.min(weapons.length - 1, tier))] };
+function createRunStats() {
+  return {
+    turns: 0,
+    kills: 0,
+    score: 0,
+    floorScore: 0,
+    combo: 0,
+    bestCombo: 0,
+    tokensEarned: 0,
+    lastKillTurn: -99
+  };
+}
+
+function loadProfile() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(PROFILE_KEY) || "null");
+    if (!stored || typeof stored !== "object") return structuredClone(DEFAULT_PROFILE);
+    const ownedWeapons = Array.isArray(stored.ownedWeapons)
+      ? stored.ownedWeapons.filter(id => WEAPONS.some(weapon => weapon.id === id))
+      : [];
+    if (!ownedWeapons.includes("arc-needle")) ownedWeapons.unshift("arc-needle");
+    return {
+      tokens: Math.max(0, Math.floor(Number(stored.tokens) || 0)),
+      ownedWeapons,
+      highScores: Array.isArray(stored.highScores)
+        ? stored.highScores
+          .filter(entry => entry && Number.isFinite(Number(entry.score)))
+          .slice(0, 5)
+        : []
+    };
+  } catch {
+    return structuredClone(DEFAULT_PROFILE);
+  }
+}
+
+function saveProfile() {
+  try {
+    localStorage.setItem(PROFILE_KEY, JSON.stringify(state.profile));
+  } catch {
+    // The game remains fully playable when storage is unavailable.
+  }
+}
+
+function copyWeapon(id) {
+  return { ...Catalog.findWeapon(id) };
+}
+
+function currentCharacter() {
+  return Catalog.findCharacter(state.selectedCharacterId);
+}
+
+function bestScore() {
+  return Number(state.profile.highScores[0]?.score) || 0;
+}
+
+function scoreRank(score) {
+  if (score >= 7000) return "S";
+  if (score >= 4500) return "A";
+  if (score >= 2600) return "B";
+  if (score >= 1200) return "C";
+  return "D";
 }
 
 function currentTheme() {
@@ -332,7 +429,7 @@ function spawnPickups() {
     kind: pickupKinds[Math.floor(state.random() * pickupKinds.length)]
   }));
 
-  if (state.floor > 1 && state.floor <= weapons.length && pickups.length) {
+  if (state.floor > 1 && pickups.length) {
     pickups[0].kind = "weapon";
   }
   if (state.floor === state.maxFloor && pickups.length) {
@@ -359,7 +456,8 @@ function buildFloor() {
   revealAround(state.player.x, state.player.y);
   setCameraImmediate();
 
-  logEvent(`${sectorName()} opened beneath Mara.`, "story");
+  const character = currentCharacter();
+  logEvent(`${sectorName()} opened beneath ${character.name}.`, "story");
   logEvent(`Archive scan: ${state.enemies.length} hostile signatures.`, "system");
   if (state.floor > 1) {
     const recovered = Math.min(5, state.player.maxHp - state.player.hp);
@@ -373,55 +471,165 @@ function newRun(sideMission) {
   state.sideMission = Boolean(sideMission);
   state.maxFloor = state.sideMission ? 3 : 6;
   state.floor = 1;
-  state.seed = (Date.now() ^ Math.floor(Math.random() * 0x7fffffff)) >>> 0;
-  state.stats = { turns: 0, kills: 0, score: 0 };
+  state.seed = 1;
+  state.stats = createRunStats();
   state.logs = [];
   state.effects = [];
   state.auto = false;
   state.nextEntityId = 1;
-  state.player = {
-    x: 0,
-    y: 0,
-    hp: 32,
-    maxHp: 32,
-    armor: 0,
-    level: 1,
-    xp: 0,
-    nextXp: 30,
-    weaponTier: 0,
-    weapon: copyWeapon(0),
-    ammo: weapons[0].magazine,
-    reserve: 28,
-    pulses: 2,
-    patches: 2,
-    credits: 0
-  };
-
-  buildFloor();
-  showBriefing();
+  state.lastBlockedMessageAt = 0;
+  state.scoreCommitted = false;
+  state.phase = "selection";
+  state.overlayMode = "selection";
+  state.player = null;
+  state.layout = null;
+  state.enemies = [];
+  state.pickups = [];
+  state.discovered = new Set();
+  state.runWeapons = new Set();
+  state.hover = null;
+  state.exitUnlocked = false;
+  renderLog();
+  gatePrompt.hidden = true;
+  operatorChip.hidden = true;
+  showCharacterSelection();
   updateUi();
 }
 
-function showBriefing() {
-  state.phase = "briefing";
-  state.overlayMode = "briefing";
+function renderCharacterRoster() {
+  const fragment = document.createDocumentFragment();
+  for (const character of CHARACTERS) {
+    const weapon = Catalog.findWeapon(character.weaponId);
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "character-card";
+    button.dataset.characterId = character.id;
+    button.setAttribute("aria-pressed", String(character.id === state.selectedCharacterId));
+    button.style.setProperty("--character-accent", character.palette.accent);
+    button.innerHTML = `
+      <canvas width="180" height="96" aria-hidden="true"></canvas>
+      <span class="character-card-copy">
+        <small>${character.callsign} / ${character.role}</small>
+        <strong>${character.name}</strong>
+        <em>${weapon.name}</em>
+        <span class="character-mini-stats">
+          <span>HP<b>${character.hp}</b></span>
+          <span>ARMOR<b>${character.armor}</b></span>
+          <span>RANGE<b>${weapon.range + character.rangeBonus}</b></span>
+        </span>
+      </span>
+    `;
+    button.addEventListener("click", () => selectCharacter(character.id));
+    fragment.appendChild(button);
+  }
+  characterRoster.replaceChildren(fragment);
+  for (const button of characterRoster.querySelectorAll(".character-card")) {
+    drawRosterPortrait(button.querySelector("canvas"), Catalog.findCharacter(button.dataset.characterId));
+  }
+}
+
+function selectCharacter(characterId, quiet) {
+  state.selectedCharacterId = Catalog.findCharacter(characterId).id;
+  for (const button of characterRoster.querySelectorAll(".character-card")) {
+    button.setAttribute("aria-pressed", String(button.dataset.characterId === state.selectedCharacterId));
+  }
+  const character = currentCharacter();
+  const weapon = Catalog.findWeapon(character.weaponId);
+  selectionSummary.innerHTML = `
+    <strong>${character.name} / ${character.role} / ${weapon.name}</strong>
+    <span>${character.description} Starter trait: ${weapon.trait}.</span>
+  `;
+  ui.characterValue.textContent = character.callsign;
+  if (!quiet) playSound("pickup");
+}
+
+function showCharacterSelection() {
   overlay.hidden = false;
-  overlayEyebrow.textContent = state.sideMission ? "SIDE ROUTE CONTRACT" : "EXPEDITION BRIEF";
-  overlayTitle.textContent = state.sideMission ? "The storm route is unstable." : "The vault is awake.";
+  characterRoster.hidden = false;
+  selectionSummary.hidden = false;
+  overlayEyebrow.textContent = state.sideMission ? "SIDE ROUTE ROSTER" : "RIFTWALKER ROSTER";
+  overlayTitle.textContent = "Choose your operator.";
   overlayText.textContent = state.sideMission
-    ? "Reach the third gate before the archive storm closes. Hostiles are stronger, supplies are richer, and retreat is not available."
-    : "Cartographer Mara Venn must descend through the living archive beneath Aster Vale, recover its memory seeds, and stop the Hollow Engine before it rewrites the surface.";
+    ? "Choose one of five specialists for a three-floor high-risk contract. Enemies hit harder, but token rewards are increased."
+    : "Five specialists are linked to the Echo Vault. Select a class, review its starting gear, and stop the Hollow Engine.";
   overlayStats.hidden = true;
   overlayStats.replaceChildren();
-  primaryOverlayButton.textContent = "BEGIN DESCENT";
+  primaryOverlayButton.textContent = state.sideMission ? "START SIDE ROUTE" : "START EXPEDITION";
+  secondaryOverlayButton.textContent = "CONTROLS";
+  renderCharacterRoster();
+  selectCharacter(state.selectedCharacterId, true);
+}
+
+function startSelectedRun() {
+  const character = currentCharacter();
+  const weapon = copyWeapon(character.weaponId);
+  state.floor = 1;
+  state.seed = (Date.now() ^ Math.floor(Math.random() * 0x7fffffff)) >>> 0;
+  state.stats = createRunStats();
+  state.logs = [];
+  state.effects = [];
+  state.auto = false;
+  state.nextEntityId = 1;
+  state.lastBlockedMessageAt = 0;
+  state.scoreCommitted = false;
+  state.runWeapons = new Set([...state.profile.ownedWeapons, character.weaponId]);
+  state.player = {
+    x: 0,
+    y: 0,
+    hp: character.hp,
+    maxHp: character.hp,
+    armor: character.armor,
+    level: 1,
+    xp: 0,
+    nextXp: 30,
+    weapon,
+    ammo: weapon.magazine,
+    reserve: character.reserve,
+    pulses: character.pulses,
+    patches: character.patches,
+    damageBonus: character.damageBonus,
+    meleeBonus: character.meleeBonus,
+    critBonus: character.critBonus,
+    rangeBonus: character.rangeBonus,
+    healBonus: character.healBonus,
+    tokenBonus: character.tokenBonus,
+    damageReduction: character.damageReduction,
+    characterId: character.id
+  };
+  buildFloor();
+  beginRun();
 }
 
 function beginRun() {
   state.phase = "playing";
   overlay.hidden = true;
-  logEvent("Mara linked the lumen compass. Manual route active.", "story");
+  characterRoster.hidden = true;
+  selectionSummary.hidden = true;
+  operatorChip.hidden = false;
+  operatorName.textContent = `${currentCharacter().name} / ${currentCharacter().role}`;
+  drawRosterPortrait(operatorPortrait, currentCharacter());
+  logEvent(`${currentCharacter().name} linked the lumen compass. Manual route active.`, "story");
   canvas.focus();
   updateUi();
+}
+
+function commitRunScore(won) {
+  if (state.scoreCommitted || !state.player) return;
+  state.scoreCommitted = true;
+  const entry = {
+    score: Math.max(0, Math.round(state.stats.score)),
+    character: currentCharacter().name,
+    callsign: currentCharacter().callsign,
+    kills: state.stats.kills,
+    floor: state.floor,
+    route: state.sideMission ? "SIDE" : "MAIN",
+    won: Boolean(won),
+    date: new Date().toISOString()
+  };
+  state.profile.highScores.push(entry);
+  state.profile.highScores.sort((a, b) => Number(b.score) - Number(a.score));
+  state.profile.highScores = state.profile.highScores.slice(0, 5);
+  saveProfile();
 }
 
 function showResult(won) {
@@ -429,19 +637,26 @@ function showResult(won) {
   state.phase = won ? "won" : "lost";
   state.overlayMode = won ? "won" : "lost";
   overlay.hidden = false;
+  gatePrompt.hidden = true;
+  characterRoster.hidden = true;
+  selectionSummary.hidden = true;
   overlayEyebrow.textContent = won ? "EXPEDITION COMPLETE" : "SIGNAL LOST";
   overlayTitle.textContent = won ? "Aster Vale remembers." : "The vault reclaimed the route.";
   overlayText.textContent = won
-    ? "Mara sealed the Hollow Engine and carried the recovered memory seeds back to the surface."
-    : "The next cartographer can recover Mara's lumen trail. Begin a new descent with a different vault layout.";
+    ? `${currentCharacter().name} sealed the Hollow Engine and carried the recovered memory seeds back to the surface.`
+    : `${currentCharacter().name}'s lumen trail remains in the archive. Choose a specialist and try a new route.`;
+  commitRunScore(won);
   overlayStats.hidden = false;
   overlayStats.innerHTML = [
     ["SCORE", state.stats.score],
-    ["FLOORS", `${state.floor}/${state.maxFloor}`],
+    ["RANK", scoreRank(state.stats.score)],
     ["KILLS", state.stats.kills],
-    ["TURNS", state.stats.turns]
+    ["TOKENS", state.stats.tokensEarned],
+    ["FLOORS", `${state.floor}/${state.maxFloor}`],
+    ["BEST COMBO", `x${(1 + Math.min(4, Math.max(0, state.stats.bestCombo - 1)) * 0.25).toFixed(2)}`]
   ].map(([label, value]) => `<span>${label}<strong>${value}</strong></span>`).join("");
-  primaryOverlayButton.textContent = won ? "NEW EXPEDITION" : "TRY AGAIN";
+  primaryOverlayButton.textContent = "CHOOSE NEXT RIFTWALKER";
+  secondaryOverlayButton.textContent = "SCORE BOARD";
   updateUi();
 }
 
@@ -449,13 +664,211 @@ function openHelp() {
   if (!helpDialog.open) helpDialog.showModal();
 }
 
+function setShopTab(tab) {
+  state.shopTab = tab === "supplies" ? "supplies" : "weapons";
+  weaponsTabButton.setAttribute("aria-selected", String(state.shopTab === "weapons"));
+  suppliesTabButton.setAttribute("aria-selected", String(state.shopTab === "supplies"));
+  renderShop();
+}
+
+function equipWeapon(weaponId) {
+  if (!state.player) {
+    shopMessage.textContent = "Start an expedition before equipping a weapon.";
+    return;
+  }
+  if (!state.runWeapons.has(weaponId) && !state.profile.ownedWeapons.includes(weaponId)) return;
+  state.runWeapons.add(weaponId);
+  state.player.weapon = copyWeapon(weaponId);
+  state.player.ammo = state.player.weapon.magazine;
+  shopMessage.textContent = `${state.player.weapon.name} equipped with a full magazine.`;
+  logEvent(`Quartermaster equipped ${state.player.weapon.name}.`, "reward");
+  playSound("pickup");
+  renderShop();
+  updateUi();
+}
+
+function buyWeapon(weaponId) {
+  const weapon = Catalog.findWeapon(weaponId);
+  if (state.profile.ownedWeapons.includes(weapon.id)) {
+    equipWeapon(weapon.id);
+    return;
+  }
+  const progressFloor = state.player ? state.floor : 1;
+  if (progressFloor < weapon.unlockFloor) {
+    shopMessage.textContent = `${weapon.name} unlocks after reaching floor ${weapon.unlockFloor}.`;
+    return;
+  }
+  if (state.profile.tokens < weapon.cost) {
+    shopMessage.textContent = `Need ${weapon.cost - state.profile.tokens} more Vault Tokens.`;
+    playSound("danger");
+    return;
+  }
+  state.profile.tokens -= weapon.cost;
+  state.profile.ownedWeapons.push(weapon.id);
+  state.runWeapons.add(weapon.id);
+  saveProfile();
+  shopMessage.textContent = `${weapon.name} permanently unlocked.`;
+  if (state.player) equipWeapon(weapon.id);
+  else {
+    playSound("pickup");
+    renderShop();
+    updateUi();
+  }
+}
+
+function buySupply(itemId) {
+  const item = SUPPLIES.find(candidate => candidate.id === itemId);
+  if (!item || !state.player || state.phase !== "playing") {
+    shopMessage.textContent = "Supplies can only be delivered during an active expedition.";
+    return;
+  }
+  if (state.profile.tokens < item.cost) {
+    shopMessage.textContent = `Need ${item.cost - state.profile.tokens} more Vault Tokens.`;
+    playSound("danger");
+    return;
+  }
+
+  state.profile.tokens -= item.cost;
+  if (item.kind === "ammo") state.player.reserve += item.amount;
+  else if (item.kind === "patch") state.player.patches += item.amount;
+  else if (item.kind === "armor") state.player.armor += item.amount;
+  else if (item.kind === "pulse") state.player.pulses += item.amount;
+  else if (item.kind === "repair") state.player.hp = state.player.maxHp;
+  saveProfile();
+  shopMessage.textContent = `${item.name} delivered to ${currentCharacter().name}.`;
+  logEvent(`Purchased ${item.name} for ${item.cost} tokens.`, "reward");
+  playSound("pickup");
+  renderShop();
+  updateUi();
+}
+
+function renderShop() {
+  shopTokensValue.textContent = String(state.profile.tokens);
+  shopMessage.textContent ||= state.player
+    ? `${currentCharacter().name} is carrying ${state.player.weapon.name}.`
+    : "Permanent weapon unlocks are available before a run.";
+
+  const fragment = document.createDocumentFragment();
+  if (state.shopTab === "weapons") {
+    const progressFloor = state.player ? state.floor : 1;
+    for (const weapon of WEAPONS) {
+      const permanentlyOwned = state.profile.ownedWeapons.includes(weapon.id);
+      const runOwned = state.runWeapons.has(weapon.id);
+      const equipped = state.player?.weapon.id === weapon.id;
+      const locked = !permanentlyOwned && !runOwned && progressFloor < weapon.unlockFloor;
+      const item = document.createElement("article");
+      item.className = `shop-item${equipped ? " current" : ""}${locked ? " locked" : ""}`;
+      item.innerHTML = `
+        <div class="shop-item-head">
+          <span>${weapon.className} / ${weapon.trait}</span>
+          <strong>${permanentlyOwned || runOwned ? "OWNED" : `${weapon.cost} T`}</strong>
+        </div>
+        <h3>${weapon.name}</h3>
+        <p>${weapon.description}</p>
+        <div class="weapon-stat-row">
+          <span>POWER<b>${weapon.min}-${weapon.max}</b></span>
+          <span>RANGE<b>${weapon.range}</b></span>
+          <span>MAG<b>${weapon.magazine}</b></span>
+        </div>
+      `;
+      const action = document.createElement("button");
+      action.type = "button";
+      if (equipped) {
+        action.textContent = "EQUIPPED";
+        action.disabled = true;
+        action.className = "owned";
+      } else if (permanentlyOwned || runOwned) {
+        action.textContent = state.player ? "EQUIP" : "OWNED";
+        action.className = "owned";
+        action.disabled = !state.player;
+        action.addEventListener("click", () => equipWeapon(weapon.id));
+      } else if (locked) {
+        action.textContent = `REACH FLOOR ${weapon.unlockFloor}`;
+        action.disabled = true;
+      } else {
+        action.textContent = `BUY FOR ${weapon.cost} TOKENS`;
+        action.disabled = state.profile.tokens < weapon.cost;
+        action.addEventListener("click", () => buyWeapon(weapon.id));
+      }
+      item.appendChild(action);
+      fragment.appendChild(item);
+    }
+  } else {
+    for (const supply of SUPPLIES) {
+      const item = document.createElement("article");
+      item.className = "shop-item";
+      item.innerHTML = `
+        <div class="shop-item-head">
+          <span>EXPEDITION SUPPLY</span>
+          <strong>${supply.cost} T</strong>
+        </div>
+        <h3>${supply.name}</h3>
+        <p>${supply.description}</p>
+      `;
+      const action = document.createElement("button");
+      action.type = "button";
+      action.textContent = state.player ? `BUY FOR ${supply.cost} TOKENS` : "ACTIVE RUN REQUIRED";
+      action.disabled = !state.player || state.phase !== "playing" || state.profile.tokens < supply.cost;
+      action.addEventListener("click", () => buySupply(supply.id));
+      item.appendChild(action);
+      fragment.appendChild(item);
+    }
+  }
+  shopGrid.replaceChildren(fragment);
+}
+
+function openShop() {
+  if (state.auto) {
+    state.auto = false;
+    logEvent("Manual route restored while the quartermaster link is open.", "system");
+  }
+  shopMessage.textContent = "";
+  renderShop();
+  updateUi();
+  if (!shopDialog.open) shopDialog.showModal();
+}
+
+function renderScoreBoard() {
+  currentRunScore.innerHTML = [
+    ["RUN SCORE", state.stats.score],
+    ["RANK", scoreRank(state.stats.score)],
+    ["KILLS", state.stats.kills],
+    ["TOKENS", state.stats.tokensEarned]
+  ].map(([label, value]) => `<span>${label}<strong>${value}</strong></span>`).join("");
+
+  if (!state.profile.highScores.length) {
+    const empty = document.createElement("li");
+    empty.className = "empty-score";
+    empty.textContent = "Complete or lose a run to record the first score.";
+    highScoreList.replaceChildren(empty);
+    return;
+  }
+
+  const fragment = document.createDocumentFragment();
+  state.profile.highScores.forEach((entry, index) => {
+    const item = document.createElement("li");
+    item.innerHTML = `
+      <b>${index + 1}</b>
+      <span>${entry.character || entry.callsign || "Unknown Riftwalker"}</span>
+      <strong>${Number(entry.score) || 0}</strong>
+      <small>${entry.route || "MAIN"} / F${entry.floor || 1}</small>
+    `;
+    fragment.appendChild(item);
+  });
+  highScoreList.replaceChildren(fragment);
+}
+
+function openScoreBoard() {
+  renderScoreBoard();
+  if (!scoreDialog.open) scoreDialog.showModal();
+}
+
 function updateObjective() {
   const remaining = state.enemies.length;
-  const atExit = sameCell(state.player, state.layout.exit);
 
-  if (state.phase === "briefing") {
-    ui.objectiveTitle.textContent = "Awaiting descent";
-    ui.objectiveText.textContent = "Review the brief and enter the Echo Vault.";
+  if (state.phase === "selection") {
+    ui.objectiveTitle.textContent = "Choose a Riftwalker";
+    ui.objectiveText.textContent = "Select one of five operators to begin.";
   } else if (state.phase === "won") {
     ui.objectiveTitle.textContent = "Vault sealed";
     ui.objectiveText.textContent = "The recovered memory seeds are safe.";
@@ -467,40 +880,71 @@ function updateObjective() {
     ui.objectiveText.textContent = state.floor === state.maxFloor
       ? "Break the Null Gardener's hold on the Loom Core."
       : "Use cover, collect supplies, and clear a route to the descent gate.";
-  } else if (atExit) {
-    ui.objectiveTitle.textContent = "Gate synchronized";
-    ui.objectiveText.textContent = "Press E to descend into the next archive sector.";
   } else {
-    ui.objectiveTitle.textContent = "Reach the descent gate";
-    ui.objectiveText.textContent = "The gate is now lit. Follow the gold signal through the vault.";
+    ui.objectiveTitle.textContent = state.floor >= state.maxFloor ? "Seal the Hollow Engine" : "Sector clear: choose your next move";
+    ui.objectiveText.textContent = state.floor >= state.maxFloor
+      ? "Press G or NEXT FLOOR from anywhere to complete the expedition."
+      : "Press B to shop, or G to load the next floor immediately.";
   }
 }
 
 function updateUi() {
-  if (!state.player || !state.layout) return;
-  const player = state.player;
-  const healthRatio = player.hp / player.maxHp;
-  ui.healthFill.style.width = `${Math.max(0, healthRatio * 100)}%`;
-  ui.healthText.textContent = `${player.hp}/${player.maxHp}`;
-  ui.floorValue.textContent = `${state.floor}/${state.maxFloor}`;
-  ui.weaponValue.textContent = player.weapon.name;
-  ui.damageValue.textContent = `${player.weapon.min}-${player.weapon.max}`;
-  ui.rangeValue.textContent = String(player.weapon.range);
-  ui.ammoValue.textContent = `${player.ammo}/${player.reserve}`;
-  ui.armorValue.textContent = String(player.armor);
-  ui.pulseValue.textContent = String(player.pulses);
-  ui.creditsValue.textContent = String(player.credits);
-  ui.levelValue.textContent = `${player.level} (${player.xp}/${player.nextXp})`;
-  ui.sectorName.textContent = sectorName();
-  ui.modeLabel.textContent = state.auto ? "AUTO ROUTE" : "MANUAL";
+  ui.tokensValue.textContent = String(state.profile.tokens);
   ui.turnValue.textContent = String(state.stats.turns);
   ui.killsValue.textContent = String(state.stats.kills);
+  ui.floorScoreValue.textContent = String(state.stats.floorScore);
   ui.scoreValue.textContent = String(state.stats.score);
+  ui.comboValue.textContent = `x${(1 + Math.min(4, Math.max(0, state.stats.combo - 1)) * 0.25).toFixed(2)}`;
+  ui.bestScoreValue.textContent = String(bestScore());
+  ui.tokensEarnedValue.textContent = String(state.stats.tokensEarned);
+  ui.rankValue.textContent = scoreRank(state.stats.score);
   ui.enemyCount.textContent = `${state.enemies.length} ${state.enemies.length === 1 ? "HOSTILE" : "HOSTILES"}`;
   autoButton.textContent = state.auto ? "AUTO ON" : "AUTO OFF";
   autoButton.setAttribute("aria-pressed", String(state.auto));
   soundButton.textContent = state.audio ? "SOUND ON" : "SOUND OFF";
   soundButton.setAttribute("aria-pressed", String(state.audio));
+
+  if (!state.player || !state.layout) {
+    ui.healthFill.style.width = "0%";
+    ui.healthText.textContent = "--/--";
+    ui.floorValue.textContent = "--";
+    ui.characterValue.textContent = currentCharacter().callsign;
+    ui.weaponValue.textContent = "--";
+    ui.damageValue.textContent = "--";
+    ui.rangeValue.textContent = "--";
+    ui.ammoValue.textContent = "--";
+    ui.armorValue.textContent = "--";
+    ui.pulseValue.textContent = "--";
+    ui.levelValue.textContent = "--";
+    ui.sectorName.textContent = "Awaiting assignment";
+    ui.modeLabel.textContent = "ROSTER";
+    gatePrompt.hidden = true;
+    gateActionButton.classList.remove("ready");
+    updateObjective();
+    return;
+  }
+
+  const player = state.player;
+  const healthRatio = player.hp / player.maxHp;
+  ui.healthFill.style.width = `${Math.max(0, healthRatio * 100)}%`;
+  ui.healthText.textContent = `${player.hp}/${player.maxHp}`;
+  ui.floorValue.textContent = `${state.floor}/${state.maxFloor}`;
+  ui.characterValue.textContent = currentCharacter().callsign;
+  ui.weaponValue.textContent = player.weapon.name;
+  ui.damageValue.textContent = `${player.weapon.min + player.damageBonus}-${player.weapon.max + player.damageBonus}`;
+  ui.rangeValue.textContent = String(player.weapon.range + player.rangeBonus);
+  ui.ammoValue.textContent = `${player.ammo}/${player.reserve}`;
+  ui.armorValue.textContent = String(player.armor);
+  ui.pulseValue.textContent = String(player.pulses);
+  ui.levelValue.textContent = `${player.level} (${player.xp}/${player.nextXp})`;
+  ui.sectorName.textContent = sectorName();
+  ui.modeLabel.textContent = state.auto ? "AUTO ROUTE" : "MANUAL";
+  const canAdvance = state.phase === "playing" && state.exitUnlocked;
+  gatePrompt.hidden = !canAdvance;
+  gateActionButton.classList.toggle("ready", canAdvance);
+  gatePromptText.textContent = state.floor >= state.maxFloor
+    ? "Press G to seal the Hollow Engine"
+    : `Press G to load floor ${state.floor + 1}`;
   updateObjective();
 }
 
@@ -523,7 +967,7 @@ function gainExperience(amount) {
     state.player.hp = Math.min(state.player.maxHp, state.player.hp + 8);
     state.player.weapon.min += 1;
     state.player.weapon.max += 1;
-    logEvent(`Level ${state.player.level}. Mara's lumen link intensified.`, "reward");
+    logEvent(`Level ${state.player.level}. ${currentCharacter().name}'s lumen link intensified.`, "reward");
     playSound("pickup");
   }
 }
@@ -531,26 +975,43 @@ function gainExperience(amount) {
 function defeatEnemy(enemy) {
   const index = state.enemies.indexOf(enemy);
   if (index !== -1) state.enemies.splice(index, 1);
+  if (state.stats.turns - state.stats.lastKillTurn > 5) state.stats.combo = 0;
+  state.stats.combo += 1;
+  state.stats.bestCombo = Math.max(state.stats.bestCombo, state.stats.combo);
+  state.stats.lastKillTurn = state.stats.turns;
   state.stats.kills += 1;
-  state.stats.score += enemy.reward * 5;
-  state.player.credits += enemy.reward;
+  const multiplier = 1 + Math.min(4, Math.max(0, state.stats.combo - 1)) * 0.25;
+  const basePoints = enemy.type === "boss" ? 1200 : 80 + enemy.reward * 8 + state.floor * 20;
+  const points = Math.round(basePoints * multiplier);
+  const tokenMultiplier = (state.sideMission ? 1.2 : 1) * (1 + state.player.tokenBonus);
+  const tokens = Math.max(1, Math.round(enemy.reward * tokenMultiplier));
+  state.stats.score += points;
+  state.stats.floorScore += points;
+  state.stats.tokensEarned += tokens;
+  state.profile.tokens += tokens;
+  saveProfile();
   gainExperience(enemy.type === "boss" ? 60 : 8 + state.floor * 2);
-  logEvent(`${enemy.name} dissolved. +${enemy.reward} credits.`, "reward");
+  logEvent(`${enemy.name} defeated. +${points} score, +${tokens} tokens, combo x${multiplier.toFixed(2)}.`, "reward");
   addEffect({ type: "burst", x: enemy.x, y: enemy.y, color: enemy.accent, duration: 500 });
+  addEffect({ type: "score", x: enemy.x, y: enemy.y, text: `+${points}`, color: "#f0c65a", duration: 700 });
 
   if (enemy.type !== "boss" && state.random() < 0.32 && !pickupAt(enemy.x, enemy.y)) {
     state.pickups.push({
       id: state.nextEntityId++,
       x: enemy.x,
       y: enemy.y,
-      kind: state.random() < 0.55 ? "credits" : "ammo"
+      kind: state.random() < 0.55 ? "tokens" : "ammo"
     });
   }
 
   if (state.enemies.length === 0) {
     state.exitUnlocked = true;
-    state.stats.score += state.floor * 120;
-    logEvent("Sector clear. The descent gate is synchronized.", "story");
+    const gateRoute = Engine.findPath(state.layout.grid, state.player, state.layout.exit, coverSet());
+    for (const cell of gateRoute) state.discovered.add(Engine.key(cell.x, cell.y));
+    const clearBonus = state.floor * 160 + (state.sideMission ? 100 : 0);
+    state.stats.score += clearBonus;
+    state.stats.floorScore += clearBonus;
+    logEvent(`Sector clear. +${clearBonus} score. Press B to shop or G to load the next floor.`, "story");
     playSound("gate");
   }
 }
@@ -567,15 +1028,16 @@ function hurtPlayer(amount, enemy) {
   let damage = Math.max(1, Math.round(amount));
   const absorbed = Math.min(state.player.armor, Math.ceil(damage / 2));
   state.player.armor -= absorbed;
-  damage -= absorbed;
+  damage = Math.max(0, damage - absorbed - state.player.damageReduction);
   state.player.hp = Math.max(0, state.player.hp - damage);
+  state.stats.combo = 0;
   state.shakeUntil = performance.now() + 180;
   addEffect({ type: "damage", x: state.player.x, y: state.player.y, text: `-${damage}`, color: "#ef765f" });
-  logEvent(`${enemy.name} hit Mara for ${damage}${absorbed ? `; armor absorbed ${absorbed}` : ""}.`, "enemy");
+  logEvent(`${enemy.name} hit ${currentCharacter().name} for ${damage}${absorbed ? `; armor absorbed ${absorbed}` : ""}.`, "enemy");
   playSound("hit");
 
   if (state.player.hp <= 0) {
-    logEvent("Mara's lumen signal faded beneath the archive.", "story");
+    logEvent(`${currentCharacter().name}'s lumen signal faded beneath the archive.`, "story");
     showResult(false);
   }
 }
@@ -585,11 +1047,14 @@ function collectPickup(pickup) {
   if (index !== -1) state.pickups.splice(index, 1);
 
   switch (pickup.kind) {
-    case "credits": {
+    case "tokens": {
       const amount = randomInt(14, 30);
-      state.player.credits += amount;
+      state.profile.tokens += amount;
+      state.stats.tokensEarned += amount;
       state.stats.score += amount * 2;
-      logEvent(`Recovered ${amount} vault credits.`, "reward");
+      state.stats.floorScore += amount * 2;
+      saveProfile();
+      logEvent(`Recovered ${amount} persistent Vault Tokens.`, "reward");
       break;
     }
     case "ammo": {
@@ -613,21 +1078,27 @@ function collectPickup(pickup) {
       logEvent("Recovered an Echo pulse charge.", "reward");
       break;
     case "weapon": {
-      const nextTier = Math.min(weapons.length - 1, state.player.weaponTier + 1);
-      if (nextTier > state.player.weaponTier) {
-        state.player.weaponTier = nextTier;
-        state.player.weapon = copyWeapon(nextTier);
+      const choices = WEAPONS.filter(weapon =>
+        weapon.unlockFloor <= Math.min(state.maxFloor, state.floor + 1) &&
+        !state.runWeapons.has(weapon.id)
+      );
+      const rewardWeapon = choices[Math.floor(state.random() * choices.length)];
+      if (rewardWeapon) {
+        state.runWeapons.add(rewardWeapon.id);
+        state.player.weapon = copyWeapon(rewardWeapon.id);
         state.player.ammo = state.player.weapon.magazine;
-        logEvent(`Weapon attuned: ${state.player.weapon.name}.`, "reward");
+        logEvent(`Run weapon recovered and equipped: ${state.player.weapon.name}.`, "reward");
       } else {
-        state.player.weapon.min += 1;
-        state.player.weapon.max += 2;
-        logEvent(`${state.player.weapon.name} gained a calibrated damage core.`, "reward");
+        state.profile.tokens += 70;
+        state.stats.tokensEarned += 70;
+        saveProfile();
+        logEvent("Duplicate weapon core converted into 70 Vault Tokens.", "reward");
       }
       break;
     }
     case "memory":
       state.stats.score += 500;
+      state.stats.floorScore += 500;
       logEvent("Recovered a memory seed from the old surface.", "story");
       break;
   }
@@ -644,6 +1115,7 @@ function checkPickup() {
 function afterPlayerTurn() {
   if (state.phase !== "playing") return;
   state.stats.turns += 1;
+  if (state.stats.turns - state.stats.lastKillTurn > 5) state.stats.combo = 0;
   takeEnemyTurn();
   updateUi();
 }
@@ -654,7 +1126,7 @@ function performMove(dx, dy) {
   const enemy = enemyAt(target.x, target.y);
 
   if (enemy) {
-    const damage = randomInt(3, 5) + state.player.level;
+    const damage = randomInt(3, 5) + state.player.level + state.player.meleeBonus;
     damageEnemy(enemy, damage, "Lumen blade");
     playSound("shoot");
     afterPlayerTurn();
@@ -662,7 +1134,16 @@ function performMove(dx, dy) {
   }
 
   if (!isFloor(target.x, target.y) || isCover(target.x, target.y)) {
-    logEvent("The route is blocked.", "system");
+    const now = performance.now();
+    if (now - state.lastBlockedMessageAt > 850) {
+      logEvent(
+        state.exitUnlocked
+          ? "Sector boundary reached. Press G or NEXT FLOOR to continue."
+          : "Blocked tile. Choose another direction or click a visible floor tile.",
+        "system"
+      );
+      state.lastBlockedMessageAt = now;
+    }
     return false;
   }
 
@@ -673,7 +1154,7 @@ function performMove(dx, dy) {
   playSound("move");
 
   if (state.exitUnlocked && sameCell(state.player, state.layout.exit)) {
-    logEvent("The descent gate is ready. Press E to continue.", "story");
+    logEvent("The descent gate is ready. Press G or E to continue.", "story");
   }
   afterPlayerTurn();
   return true;
@@ -682,7 +1163,8 @@ function performMove(dx, dy) {
 function fireAt(enemy) {
   if (state.phase !== "playing" || !enemy || !state.enemies.includes(enemy)) return false;
   const distance = Engine.manhattan(state.player, enemy);
-  if (distance > state.player.weapon.range) {
+  const effectiveRange = state.player.weapon.range + state.player.rangeBonus;
+  if (distance > effectiveRange) {
     logEvent(`${enemy.name} is outside ${state.player.weapon.name} range.`, "system");
     return false;
   }
@@ -696,10 +1178,20 @@ function fireAt(enemy) {
     return false;
   }
 
-  state.player.ammo -= 1;
-  let damage = randomInt(state.player.weapon.min, state.player.weapon.max);
-  const critical = state.random() < 0.13;
-  if (critical) damage = Math.round(damage * 1.65);
+  const shotCount = Math.min(state.player.weapon.shots || 1, state.player.ammo);
+  state.player.ammo -= shotCount;
+  let damage = 0;
+  let criticals = 0;
+  for (let shot = 0; shot < shotCount; shot++) {
+    let shotDamage = randomInt(state.player.weapon.min, state.player.weapon.max) + state.player.damageBonus;
+    if (distance <= 2) shotDamage += state.player.weapon.closeBonus || 0;
+    const criticalChance = 0.13 + state.player.critBonus + (state.player.weapon.critBonus || 0);
+    if (state.random() < criticalChance) {
+      shotDamage = Math.round(shotDamage * 1.65);
+      criticals += 1;
+    }
+    damage += shotDamage;
+  }
   addEffect({
     type: "beam",
     from: { x: state.player.x, y: state.player.y },
@@ -707,7 +1199,20 @@ function fireAt(enemy) {
     color: state.player.weapon.color,
     duration: 190
   });
-  damageEnemy(enemy, damage, critical ? "Critical shot" : state.player.weapon.name);
+  const impactPoint = { x: enemy.x, y: enemy.y };
+  damageEnemy(
+    enemy,
+    damage,
+    criticals ? `${state.player.weapon.name} critical${criticals > 1 ? " burst" : ""}` : state.player.weapon.name
+  );
+  if (state.player.weapon.splash > 0) {
+    const nearby = state.enemies.filter(candidate =>
+      candidate !== enemy && Engine.manhattan(candidate, impactPoint) <= 1
+    );
+    for (const candidate of nearby) {
+      damageEnemy(candidate, state.player.weapon.splash, `${state.player.weapon.name} splash`);
+    }
+  }
   playSound("shoot");
   afterPlayerTurn();
   return true;
@@ -716,7 +1221,7 @@ function fireAt(enemy) {
 function shootNearest() {
   const target = state.enemies
     .filter(enemy =>
-      Engine.manhattan(state.player, enemy) <= state.player.weapon.range &&
+      Engine.manhattan(state.player, enemy) <= state.player.weapon.range + state.player.rangeBonus &&
       Engine.lineOfSight(state.layout.grid, state.player, enemy, coverSet())
     )
     .sort((a, b) => Engine.manhattan(state.player, a) - Engine.manhattan(state.player, b))[0];
@@ -757,7 +1262,10 @@ function usePatch() {
     logEvent("Vitals already stable.", "system");
     return false;
   }
-  const healed = Math.min(state.player.maxHp - state.player.hp, 12 + state.player.level * 2);
+  const healed = Math.min(
+    state.player.maxHp - state.player.hp,
+    12 + state.player.level * 2 + state.player.healBonus
+  );
   state.player.patches -= 1;
   state.player.hp += healed;
   logEvent(`Living fiber restored ${healed} vitals.`, "reward");
@@ -792,24 +1300,20 @@ function usePulse() {
 
 function waitTurn() {
   if (state.phase !== "playing") return false;
-  logEvent("Mara held position and listened to the archive.", "system");
+  logEvent(`${currentCharacter().name} held position and listened to the archive.`, "system");
   afterPlayerTurn();
   return true;
 }
 
 function interactWithGate() {
   if (state.phase !== "playing") return false;
-  if (!sameCell(state.player, state.layout.exit)) {
-    logEvent("Stand on the gold descent gate to use it.", "system");
-    return false;
-  }
   if (!state.exitUnlocked) {
-    logEvent("The gate is sealed while hostile signatures remain.", "enemy");
+    logEvent(`${state.enemies.length} hostile signature${state.enemies.length === 1 ? "" : "s"} still seal the next floor.`, "enemy");
     return false;
   }
 
   if (state.floor >= state.maxFloor) {
-    state.stats.score += state.player.hp * 20 + state.player.credits * 3;
+    state.stats.score += state.player.hp * 20 + state.stats.bestCombo * 60;
     logEvent("The Hollow Engine fell silent.", "story");
     playSound("gate");
     showResult(true);
@@ -817,7 +1321,12 @@ function interactWithGate() {
   }
 
   state.floor += 1;
-  state.stats.score += 300 + state.floor * 80;
+  const descentBonus = 300 + state.floor * 80;
+  state.stats.score += descentBonus;
+  state.stats.floorScore = 0;
+  state.stats.combo = 0;
+  gatePrompt.hidden = true;
+  logEvent(`Gate recall engaged from the cleared sector. +${descentBonus} score.`, "story");
   playSound("gate");
   buildFloor();
   updateUi();
@@ -883,7 +1392,7 @@ function autoStep() {
 
   const visibleTarget = state.enemies
     .filter(enemy =>
-      Engine.manhattan(state.player, enemy) <= state.player.weapon.range &&
+      Engine.manhattan(state.player, enemy) <= state.player.weapon.range + state.player.rangeBonus &&
       Engine.lineOfSight(state.layout.grid, state.player, enemy, coverSet())
     )
     .sort((a, b) => Engine.manhattan(state.player, a) - Engine.manhattan(state.player, b))[0];
@@ -909,8 +1418,7 @@ function autoStep() {
     return;
   }
 
-  if (sameCell(state.player, state.layout.exit)) interactWithGate();
-  else moveToward(state.layout.exit);
+  interactWithGate();
 }
 
 function toggleAuto() {
@@ -927,6 +1435,7 @@ function performAction(action) {
     medkit: usePatch,
     reload: reloadWeapon,
     interact: interactWithGate,
+    shop: openShop,
     wait: waitTurn
   };
   actions[action]?.();
@@ -940,6 +1449,9 @@ function setCameraImmediate() {
 }
 
 function cameraTarget() {
+  if (!state.player) {
+    return { x: canvas.width / 2, y: canvas.height * 0.34 };
+  }
   return {
     x: canvas.width * 0.47 - (state.player.x - state.player.y) * ISO_W / 2,
     y: canvas.height * 0.36 - (state.player.x + state.player.y) * ISO_H / 2
@@ -1077,12 +1589,30 @@ function drawPortal() {
   ctx.restore();
 }
 
+function drawGateRoute() {
+  if (!state.exitUnlocked) return;
+  const path = Engine.findPath(state.layout.grid, state.player, state.layout.exit, coverSet());
+  if (path.length < 2) return;
+  const pulse = 0.45 + Math.sin(performance.now() / 180) * 0.16;
+  ctx.save();
+  ctx.strokeStyle = "#f0c65a";
+  ctx.fillStyle = "#f0c65a";
+  ctx.lineWidth = 2;
+  ctx.globalAlpha = pulse;
+  for (let index = 1; index < path.length; index += 2) {
+    const point = isoPoint(path[index].x, path[index].y);
+    diamondPath(point.x, point.y + 2, ISO_W - 13, ISO_H - 7);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
 function drawPickup(pickup) {
   const point = isoPoint(pickup.x, pickup.y);
   const x = point.x;
   const y = point.y + ISO_H / 2 - 6 + Math.sin((performance.now() + pickup.id * 80) / 220) * 2;
   const colors = {
-    credits: "#efc65b",
+    tokens: "#efc65b",
     ammo: "#ef765f",
     patch: "#75c98a",
     armor: "#79b9d7",
@@ -1126,43 +1656,155 @@ function drawShadow(x, y, radius) {
   ctx.fill();
 }
 
+function drawCharacterFigure(targetContext, character, scale) {
+  const palette = character.palette;
+  const drawScale = scale || 1;
+  targetContext.save();
+  targetContext.scale(drawScale, drawScale);
+
+  targetContext.fillStyle = "rgba(0, 0, 0, 0.46)";
+  targetContext.beginPath();
+  targetContext.ellipse(0, 1, 10, 4, 0, 0, Math.PI * 2);
+  targetContext.fill();
+
+  targetContext.fillStyle = "#10161a";
+  targetContext.fillRect(-7, -8, 5, 9);
+  targetContext.fillRect(2, -8, 5, 9);
+  targetContext.fillStyle = "#3c4950";
+  targetContext.fillRect(-8, -2, 6, 3);
+  targetContext.fillRect(2, -2, 6, 3);
+
+  targetContext.fillStyle = palette.primary;
+  targetContext.beginPath();
+  targetContext.moveTo(-10, -25);
+  targetContext.lineTo(9, -25);
+  targetContext.lineTo(11, -7);
+  targetContext.lineTo(6, -4);
+  targetContext.lineTo(0, -8);
+  targetContext.lineTo(-6, -4);
+  targetContext.lineTo(-11, -7);
+  targetContext.closePath();
+  targetContext.fill();
+
+  targetContext.fillStyle = palette.secondary;
+  targetContext.fillRect(-10, -23, 4, 14);
+  targetContext.fillRect(6, -23, 4, 14);
+  targetContext.fillStyle = "#0c1215";
+  targetContext.fillRect(-2, -24, 4, 15);
+  targetContext.fillStyle = palette.accent;
+  targetContext.fillRect(-3, -21, 6, 4);
+  targetContext.fillRect(-1, -15, 2, 5);
+
+  targetContext.fillStyle = palette.primary;
+  targetContext.fillRect(-14, -23, 5, 12);
+  targetContext.fillRect(9, -23, 5, 12);
+  targetContext.fillStyle = palette.light;
+  targetContext.fillRect(-14, -12, 5, 3);
+
+  targetContext.fillStyle = palette.skin;
+  targetContext.fillRect(-6, -36, 12, 12);
+  targetContext.fillStyle = palette.hair;
+
+  if (character.id === "mara") {
+    targetContext.fillRect(-7, -39, 14, 5);
+    targetContext.fillRect(-7, -35, 4, 8);
+    targetContext.fillRect(5, -35, 3, 6);
+  } else if (character.id === "kael") {
+    targetContext.fillRect(-7, -40, 14, 5);
+    targetContext.fillRect(-7, -36, 5, 5);
+    targetContext.fillStyle = palette.secondary;
+    targetContext.fillRect(4, -39, 5, 3);
+  } else if (character.id === "imani") {
+    targetContext.fillRect(-7, -39, 14, 6);
+    targetContext.fillRect(-9, -38, 4, 7);
+    targetContext.fillRect(5, -38, 4, 7);
+    targetContext.beginPath();
+    targetContext.arc(-7, -40, 3, 0, Math.PI * 2);
+    targetContext.arc(7, -40, 3, 0, Math.PI * 2);
+    targetContext.fill();
+  } else if (character.id === "tor") {
+    targetContext.fillRect(-7, -39, 14, 5);
+    targetContext.fillRect(-7, -35, 3, 6);
+    targetContext.fillStyle = "#5b352b";
+    targetContext.fillRect(-5, -29, 10, 6);
+  } else {
+    targetContext.beginPath();
+    targetContext.moveTo(-9, -34);
+    targetContext.lineTo(-5, -42);
+    targetContext.lineTo(6, -42);
+    targetContext.lineTo(10, -33);
+    targetContext.lineTo(6, -26);
+    targetContext.lineTo(-7, -26);
+    targetContext.closePath();
+    targetContext.fill();
+  }
+
+  targetContext.fillStyle = palette.light;
+  targetContext.fillRect(-3, -32, 2, 2);
+  targetContext.fillRect(2, -32, 2, 2);
+  targetContext.fillStyle = palette.accent;
+  targetContext.fillRect(5, -31, 2, 2);
+
+  targetContext.strokeStyle = "#aeb8bc";
+  targetContext.lineWidth = 2;
+  targetContext.beginPath();
+  targetContext.moveTo(10, -22);
+  targetContext.lineTo(15, -10);
+  targetContext.stroke();
+  targetContext.fillStyle = palette.accent;
+  targetContext.shadowColor = palette.accent;
+  targetContext.shadowBlur = 7;
+  targetContext.fillRect(11, -25, 7, 5);
+  targetContext.fillStyle = "#d9e2e2";
+  targetContext.fillRect(16, -24, 5, 2);
+  targetContext.shadowBlur = 0;
+  targetContext.restore();
+}
+
+function drawRosterPortrait(portraitCanvas, character) {
+  if (!portraitCanvas) return;
+  const portraitContext = portraitCanvas.getContext("2d");
+  const width = portraitCanvas.width;
+  const height = portraitCanvas.height;
+  portraitContext.clearRect(0, 0, width, height);
+  portraitContext.fillStyle = "#080c0f";
+  portraitContext.fillRect(0, 0, width, height);
+  portraitContext.fillStyle = `${character.palette.accent}20`;
+  portraitContext.beginPath();
+  portraitContext.moveTo(width * 0.52, 0);
+  portraitContext.lineTo(width, 0);
+  portraitContext.lineTo(width, height);
+  portraitContext.lineTo(width * 0.18, height);
+  portraitContext.closePath();
+  portraitContext.fill();
+  portraitContext.strokeStyle = `${character.palette.accent}28`;
+  portraitContext.lineWidth = 1;
+  for (let x = 10; x < width; x += 18) {
+    portraitContext.beginPath();
+    portraitContext.moveTo(x, 0);
+    portraitContext.lineTo(x, height);
+    portraitContext.stroke();
+  }
+  const scale = Math.min(width / 74, height / 52);
+  portraitContext.save();
+  portraitContext.translate(width / 2, height - 6);
+  drawCharacterFigure(portraitContext, character, scale);
+  portraitContext.restore();
+}
+
 function drawPlayer() {
   const point = isoPoint(state.player.x, state.player.y);
   const baseY = point.y + ISO_H / 2;
   const bob = Math.sin(performance.now() / 210) * 0.7;
+  const playerScale = window.matchMedia("(max-width: 620px)").matches ? 1.45 : 1.12;
   ctx.save();
   ctx.translate(point.x, baseY + bob);
-  drawShadow(0, 2, 9);
-
-  ctx.fillStyle = "#263642";
+  ctx.strokeStyle = `${currentCharacter().palette.accent}8f`;
+  ctx.lineWidth = 1.5;
   ctx.beginPath();
-  ctx.moveTo(-8, -16);
-  ctx.lineTo(7, -16);
-  ctx.lineTo(10, 0);
-  ctx.lineTo(-10, 0);
-  ctx.closePath();
-  ctx.fill();
-
-  ctx.fillStyle = "#ef765f";
-  ctx.fillRect(-7, -18, 13, 4);
-  ctx.fillStyle = "#d8b18b";
-  ctx.fillRect(-5, -27, 10, 10);
-  ctx.fillStyle = "#1a2025";
-  ctx.fillRect(-6, -30, 12, 5);
-  ctx.fillStyle = "#ecf3ed";
-  ctx.fillRect(-3, -24, 2, 2);
-  ctx.fillRect(2, -24, 2, 2);
-
-  ctx.strokeStyle = "#aab4af";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(8, -18);
-  ctx.lineTo(12, -5);
+  ctx.ellipse(0, 2, 15, 6, 0, 0, Math.PI * 2);
   ctx.stroke();
-  ctx.fillStyle = "#62d8d0";
-  ctx.shadowColor = "#62d8d0";
-  ctx.shadowBlur = 9;
-  ctx.fillRect(9, -21, 6, 6);
+  drawCharacterFigure(ctx, currentCharacter(), playerScale);
   ctx.restore();
 }
 
@@ -1306,12 +1948,14 @@ function drawEffects(now) {
       ctx.moveTo(from.x, from.y + ISO_H / 2 - 15);
       ctx.lineTo(to.x, to.y + ISO_H / 2 - 14);
       ctx.stroke();
-    } else if (effect.type === "damage") {
+    } else if (effect.type === "damage" || effect.type === "score") {
       const point = isoPoint(effect.x, effect.y);
       ctx.fillStyle = effect.color;
-      ctx.font = "700 16px Consolas";
+      ctx.font = effect.type === "score"
+        ? "700 17px Bahnschrift, Segoe UI, sans-serif"
+        : "700 15px Cascadia Mono, Consolas, monospace";
       ctx.textAlign = "center";
-      ctx.fillText(effect.text, point.x, point.y - 23 - progress * 18);
+      ctx.fillText(effect.text, point.x, point.y - (effect.type === "score" ? 34 : 23) - progress * 18);
     } else {
       const point = isoPoint(effect.x, effect.y);
       const radius = effect.type === "pulse" ? 18 + progress * 90 : 8 + progress * 28;
@@ -1353,6 +1997,7 @@ function render(now) {
     }
     visibleTiles.sort((a, b) => a.x + a.y - (b.x + b.y));
     for (const tile of visibleTiles) drawFloorTile(tile.x, tile.y);
+    drawGateRoute();
     drawHover();
     for (const tile of visibleTiles) drawBoundaryWalls(tile.x, tile.y);
 
@@ -1407,6 +2052,10 @@ function handleCanvasClick(event) {
   if (state.phase !== "playing") return;
   const target = screenToGrid(event.clientX, event.clientY);
   if (!isFloor(target.x, target.y) || !state.discovered.has(Engine.key(target.x, target.y))) return;
+  if (state.exitUnlocked && sameCell(target, state.layout.exit)) {
+    interactWithGate();
+    return;
+  }
   const enemy = enemyAt(target.x, target.y);
   if (enemy) {
     fireAt(enemy);
@@ -1421,8 +2070,19 @@ function handleCanvasClick(event) {
 
 function handleKey(event) {
   const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
-  if (helpDialog.open) {
-    if (event.key === "Escape") helpDialog.close();
+  const openDialog = [helpDialog, shopDialog, scoreDialog].find(dialog => dialog.open);
+  if (openDialog) {
+    if (event.key === "Escape") openDialog.close();
+    return;
+  }
+  if (event.key === "Tab") {
+    event.preventDefault();
+    openScoreBoard();
+    return;
+  }
+  if (key === "b") {
+    event.preventDefault();
+    openShop();
     return;
   }
   if (!overlay.hidden && event.key === "Enter") {
@@ -1431,6 +2091,11 @@ function handleKey(event) {
     return;
   }
   if (state.phase !== "playing") return;
+  if (key === "m") {
+    event.preventDefault();
+    toggleAuto();
+    return;
+  }
 
   const movement = {
     ArrowUp: [0, -1],
@@ -1451,10 +2116,16 @@ function handleKey(event) {
 
   const actions = {
     " ": "shoot",
+    f: "shoot",
+    "1": "shoot",
     q: "pulse",
+    "2": "pulse",
     h: "medkit",
+    "3": "medkit",
     r: "reload",
+    "4": "reload",
     e: "interact",
+    g: "interact",
     x: "wait"
   };
   if (actions[key]) {
@@ -1490,6 +2161,9 @@ document.querySelectorAll("[data-move]").forEach(button => {
 });
 
 autoButton.addEventListener("click", toggleAuto);
+shopButton.addEventListener("click", openShop);
+scoresButton.addEventListener("click", openScoreBoard);
+nextFloorButton.addEventListener("click", interactWithGate);
 newRunButton.addEventListener("click", () => newRun(false));
 sideRunButton.addEventListener("click", () => newRun(true));
 soundButton.addEventListener("click", () => {
@@ -1499,10 +2173,23 @@ soundButton.addEventListener("click", () => {
 });
 helpButton.addEventListener("click", openHelp);
 closeHelpButton.addEventListener("click", () => helpDialog.close());
-secondaryOverlayButton.addEventListener("click", openHelp);
+closeShopButton.addEventListener("click", () => shopDialog.close());
+closeScoreButton.addEventListener("click", () => scoreDialog.close());
+weaponsTabButton.addEventListener("click", () => setShopTab("weapons"));
+suppliesTabButton.addEventListener("click", () => setShopTab("supplies"));
+resetScoresButton.addEventListener("click", () => {
+  state.profile.highScores = [];
+  saveProfile();
+  renderScoreBoard();
+  updateUi();
+});
+secondaryOverlayButton.addEventListener("click", () => {
+  if (state.overlayMode === "selection") openHelp();
+  else openScoreBoard();
+});
 
 primaryOverlayButton.addEventListener("click", () => {
-  if (state.overlayMode === "briefing") beginRun();
+  if (state.overlayMode === "selection") startSelectedRun();
   else newRun(state.sideMission);
 });
 
@@ -1511,8 +2198,12 @@ setInterval(autoStep, 310);
 window.__RIFTWARD_DEBUG__ = {
   state,
   newRun,
+  startSelectedRun,
+  selectCharacter,
   performMove,
   performAction,
+  interactWithGate,
+  openShop,
   screenToGrid
 };
 
