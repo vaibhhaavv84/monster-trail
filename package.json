@@ -1,8 +1,8 @@
 {
   "name": "monster-trail",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "Original top-down 2D monster adventure browser game prototype.",
+  "description": "Riftward, an original isometric turn-based dungeon roguelike for the browser.",
   "scripts": {
     "start": "node scripts/serve.mjs",
     "dev": "node scripts/serve.mjs",
@@ -10,9 +10,10 @@
   },
   "keywords": [
     "browser-game",
-    "monster-adventure",
-    "canvas",
-    "rpg"
+    "isometric",
+    "roguelike",
+    "turn-based",
+    "canvas"
   ],
   "license": "MIT"
 }

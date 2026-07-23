@@ -3,29 +3,145 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Monster Trail</title>
+    <meta
+      name="description"
+      content="Riftward is an original isometric, turn-based dungeon roguelike."
+    />
+    <title>Riftward | Isometric Dungeon Roguelike</title>
     <link rel="stylesheet" href="src/styles.css" />
   </head>
   <body>
-    <main class="shell">
-      <section class="game-frame" aria-label="Monster Trail game">
-        <canvas id="game" width="960" height="640"></canvas>
-        <div id="dialog" class="dialog hidden" role="status" aria-live="polite"></div>
+    <main class="game-app">
+      <header class="topbar">
+        <div class="brand" aria-label="Riftward">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <div>
+            <p class="brand-title">RIFTWARD</p>
+            <p class="brand-subtitle">Echo Vault Expedition</p>
+          </div>
+        </div>
+        <nav class="run-controls" aria-label="Run controls">
+          <button id="autoButton" type="button" aria-pressed="false" title="Toggle automatic exploration">
+            AUTO OFF
+          </button>
+          <button id="newRunButton" type="button" title="Start a fresh expedition">NEW RUN</button>
+          <button id="sideRunButton" type="button" title="Start a shorter high-risk route">SIDE ROUTE</button>
+          <button id="soundButton" type="button" aria-pressed="true" title="Toggle game sound">SOUND ON</button>
+          <button id="helpButton" class="icon-button" type="button" title="Open controls" aria-label="Open controls">
+            ?
+          </button>
+        </nav>
+      </header>
+
+      <section class="status-strip" aria-label="Expedition status">
+        <div class="health-readout">
+          <span class="status-label">VITALS</span>
+          <div class="health-track" aria-hidden="true"><span id="healthFill"></span></div>
+          <strong id="healthText">32/32</strong>
+        </div>
+        <div class="status-cell"><span class="status-label">FLOOR</span><strong id="floorValue">1/6</strong></div>
+        <div class="status-cell status-wide"><span class="status-label">WEAPON</span><strong id="weaponValue">Arc Needle</strong></div>
+        <div class="status-cell"><span class="status-label">POWER</span><strong id="damageValue">4-7</strong></div>
+        <div class="status-cell"><span class="status-label">RANGE</span><strong id="rangeValue">5</strong></div>
+        <div class="status-cell"><span class="status-label">AMMO</span><strong id="ammoValue">8/28</strong></div>
+        <div class="status-cell"><span class="status-label">ARMOR</span><strong id="armorValue">0</strong></div>
+        <div class="status-cell"><span class="status-label">PULSES</span><strong id="pulseValue">2</strong></div>
+        <div class="status-cell"><span class="status-label">CREDITS</span><strong id="creditsValue">0</strong></div>
+        <div class="status-cell"><span class="status-label">LEVEL</span><strong id="levelValue">1</strong></div>
       </section>
-      <aside class="panel">
-        <div>
-          <p class="eyebrow">Monster Trail</p>
-          <h1>Leafport Route</h1>
-          <p class="summary">Explore the grass road, meet villagers, and battle wild companions in a classic top-down 2D adventure.</p>
+
+      <section class="workspace">
+        <div class="stage" aria-label="Riftward game board">
+          <canvas id="game" width="960" height="640" tabindex="0" aria-label="Isometric dungeon map"></canvas>
+          <div class="stage-caption">
+            <span id="sectorName">Glassroot Gate</span>
+            <span id="modeLabel">MANUAL</span>
+          </div>
+          <div id="overlay" class="overlay">
+            <div class="overlay-card">
+              <p id="overlayEyebrow" class="overlay-eyebrow">EXPEDITION BRIEF</p>
+              <h1 id="overlayTitle">The vault is awake.</h1>
+              <p id="overlayText">
+                Cartographer Mara Venn must descend through the living archive beneath Aster Vale,
+                recover its memory seeds, and stop the Hollow Engine before it rewrites the surface.
+              </p>
+              <div id="overlayStats" class="overlay-stats" hidden></div>
+              <div class="overlay-actions">
+                <button id="primaryOverlayButton" type="button">BEGIN DESCENT</button>
+                <button id="secondaryOverlayButton" class="secondary-button" type="button">CONTROLS</button>
+              </div>
+            </div>
+          </div>
         </div>
-        <div class="controls">
-          <p><strong>Move</strong> Arrow keys or WASD</p>
-          <p><strong>Talk / Inspect</strong> Space or Enter</p>
-          <p><strong>Battle</strong> Use the menu keys shown on screen</p>
+
+        <aside class="field-panel" aria-label="Expedition information">
+          <div class="objective-block">
+            <p class="panel-kicker">CURRENT OBJECTIVE</p>
+            <h2 id="objectiveTitle">Clear the sector</h2>
+            <p id="objectiveText">Defeat the wardens and locate the descent gate.</p>
+            <div class="objective-meta">
+              <span>TURN <strong id="turnValue">0</strong></span>
+              <span>KILLS <strong id="killsValue">0</strong></span>
+              <span>SCORE <strong id="scoreValue">0</strong></span>
+            </div>
+          </div>
+          <div class="log-block">
+            <div class="panel-heading">
+              <p class="panel-kicker">FIELD LOG</p>
+              <span id="enemyCount">0 HOSTILES</span>
+            </div>
+            <ol id="fieldLog" aria-live="polite"></ol>
+          </div>
+        </aside>
+      </section>
+
+      <section class="action-bar" aria-label="Actions">
+        <button type="button" data-action="shoot"><kbd>SPACE</kbd><span>Shoot</span></button>
+        <button type="button" data-action="pulse"><kbd>Q</kbd><span>Echo pulse</span></button>
+        <button type="button" data-action="medkit"><kbd>H</kbd><span>Use patch</span></button>
+        <button type="button" data-action="reload"><kbd>R</kbd><span>Reload</span></button>
+        <button type="button" data-action="interact"><kbd>E</kbd><span>Enter gate</span></button>
+        <button type="button" data-action="wait"><kbd>X</kbd><span>Wait</span></button>
+      </section>
+
+      <section class="touch-controls" aria-label="Touch controls">
+        <div class="touch-dpad">
+          <button type="button" data-move="0,-1" aria-label="Move up" title="Move up">^</button>
+          <button type="button" data-move="-1,0" aria-label="Move left" title="Move left">&lt;</button>
+          <button type="button" data-move="0,1" aria-label="Move down" title="Move down">v</button>
+          <button type="button" data-move="1,0" aria-label="Move right" title="Move right">&gt;</button>
         </div>
-        <div id="party" class="party"></div>
-      </aside>
+        <div class="touch-actions">
+          <button type="button" data-action="shoot">SHOOT</button>
+          <button type="button" data-action="pulse">PULSE</button>
+          <button type="button" data-action="medkit">PATCH</button>
+          <button type="button" data-action="interact">GATE</button>
+        </div>
+      </section>
     </main>
+
+    <dialog id="helpDialog">
+      <div class="dialog-heading">
+        <div>
+          <p class="panel-kicker">FIELD MANUAL</p>
+          <h2>How to survive the Echo Vault</h2>
+        </div>
+        <button id="closeHelpButton" class="icon-button" type="button" aria-label="Close controls" title="Close controls">X</button>
+      </div>
+      <div class="help-grid">
+        <p><kbd>WASD</kbd> or <kbd>ARROWS</kbd><span>Move one isometric tile and advance the enemy turn.</span></p>
+        <p><kbd>SPACE</kbd><span>Fire at the nearest visible enemy. You can also click an enemy.</span></p>
+        <p><kbd>Q</kbd><span>Spend a pulse charge to damage and stun nearby enemies.</span></p>
+        <p><kbd>H</kbd><span>Use a field patch to recover health.</span></p>
+        <p><kbd>R</kbd><span>Reload your weapon from reserve ammunition.</span></p>
+        <p><kbd>E</kbd><span>Descend when standing on an unlocked gate.</span></p>
+        <p><kbd>X</kbd><span>Wait one turn without moving.</span></p>
+        <p><kbd>CLICK</kbd><span>Choose a visible tile or target. The game takes one step toward it.</span></p>
+      </div>
+      <p class="help-note">Every move is a turn. Use cover to break line of sight, collect supplies, and upgrade before the final floor.</p>
+    </dialog>
+
+    <script src="src/engine.js"></script>
     <script src="src/main.js"></script>
   </body>
 </html>

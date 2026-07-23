@@ -1,65 +1,76 @@
-# Monster Trail
+# Riftward
 
-Monster Trail is an original top-down 2D monster-adventure browser game prototype. It is inspired by classic handheld RPG structure: tile maps, NPCs, tall grass encounters, and turn-based battles, but it does not reuse Pokemon characters, assets, names, or code.
+Riftward is an original isometric, turn-based dungeon roguelike. It takes inspiration from the readable tactical rhythm of classic browser roguelikes while using its own setting, characters, enemies, artwork, story, map generator, and code.
+
+You play Mara Venn, a cartographer descending through the living Echo Vault beneath Aster Vale. Clear procedurally generated sectors, collect supplies, upgrade your weapon, and seal the Hollow Engine on the final floor.
 
 ## Play
 
-Play the current version online:
+**Online:** https://vaibhhaavv84.github.io/monster-trail/
 
-**https://vaibhhaavv84.github.io/monster-trail/**
+On Windows, double-click `START_GAME.cmd`. The launcher opens `index.html` directly and does not use a localhost port.
 
-On Windows, double-click `START_GAME.cmd`. The launcher opens the game directly in your browser without using a localhost port.
+For development:
 
-For development, you can also run it from a terminal:
-
-```bash
-npm run start
+```powershell
+npm.cmd run start
 ```
 
 Then open `http://127.0.0.1:4317`.
 
 ## Controls
 
-| Action | Keys |
+| Action | Control |
 | --- | --- |
-| Move | Arrow keys or WASD |
-| Talk / inspect | Space or Enter |
-| Battle actions | 1, 2, 3, 4 |
+| Move one tile | Arrow keys or WASD |
+| Shoot nearest visible enemy | Space |
+| Echo pulse | Q |
+| Use field patch | H |
+| Reload | R |
+| Enter an unlocked gate | E |
+| Wait one turn | X |
+| Move or target | Click a visible tile or enemy |
 
-## Current Features
+Touch controls appear on smaller screens.
 
-- Top-down tile-map exploration
-- Village, path, tall grass, trees, and buildings
-- NPC dialogue
-- Random tall-grass encounters
-- Turn-based battle scene
-- Simple attack, special attack, befriend, and run actions
-- Party status panel
+## Game Loop
+
+- Procedurally generated isometric rooms and corridors
+- Tile-by-tile movement where every action advances enemy turns
+- Melee and ranged enemies with cover and line-of-sight rules
+- Ammunition, armor, healing, pulse gadgets, credits, and weapon upgrades
+- Fog-of-war exploration and a live field log
+- Six-floor main expedition with a final boss
+- Three-floor high-risk side route
+- Optional automatic route mode
+- Original canvas-drawn characters and effects
 
 ## Project Structure
 
 ```text
 monster-trail/
-|-- .github/workflows/pages.yml  # GitHub Pages deployment
-|-- scripts/serve.mjs            # Local development server
-|-- scripts/smoke-test.mjs       # Lightweight project checks
-|-- src/main.js                  # World, encounters, and battles
-|-- src/styles.css               # Responsive game layout
-|-- index.html                   # Browser entry point
-|-- START_GAME.cmd               # Windows launcher
+|-- .github/workflows/pages.yml
+|-- scripts/
+|   |-- serve.mjs
+|   `-- smoke-test.mjs
+|-- src/
+|   |-- engine.js
+|   |-- main.js
+|   `-- styles.css
+|-- index.html
+|-- START_GAME.cmd
 |-- package.json
 `-- README.md
 ```
 
-## Roadmap
+## Verification
 
-- Larger connected maps
-- Creature roster and capture collection
-- Trainer battles
-- Inventory, healing items, and shops
-- Save/load
-- Original sprite sheets and music
-- Mobile touch controls
+```powershell
+npm.cmd test
+```
+
+The test checks deterministic generation, path connectivity, combat systems, boss progression, responsive controls, launcher behavior, and deployment structure.
+
 ## License
 
-MIT. See `LICENSE`.
+MIT. All game code, names, story, and visuals in this repository are original to this project.
