@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="Riftward is an original isometric, turn-based dungeon roguelike."
+      content="Riftward is an original isometric, turn-based dungeon roguelike with five playable Riftwalkers, persistent progression, weapons, and a field shop."
     />
     <title>Riftward | Isometric Dungeon Roguelike</title>
     <link rel="stylesheet" href="src/styles.css" />
@@ -20,13 +20,24 @@
             <p class="brand-subtitle">Echo Vault Expedition</p>
           </div>
         </div>
+
+        <div id="operatorChip" class="operator-chip" hidden>
+          <canvas id="operatorPortrait" width="42" height="42" aria-hidden="true"></canvas>
+          <span>
+            <small>ACTIVE RIFTWALKER</small>
+            <strong id="operatorName">Select operator</strong>
+          </span>
+        </div>
+
         <nav class="run-controls" aria-label="Run controls">
-          <button id="autoButton" type="button" aria-pressed="false" title="Toggle automatic exploration">
-            AUTO OFF
+          <button id="autoButton" type="button" aria-pressed="false" title="Toggle automatic exploration (M)">
+            AUTO
           </button>
-          <button id="newRunButton" type="button" title="Start a fresh expedition">NEW RUN</button>
+          <button id="shopButton" type="button" title="Open the field shop (B)">SHOP</button>
+          <button id="scoresButton" type="button" title="Open the score board (Tab)">SCORES</button>
+          <button id="newRunButton" type="button" title="Choose a Riftwalker for a fresh expedition">NEW RUN</button>
           <button id="sideRunButton" type="button" title="Start a shorter high-risk route">SIDE ROUTE</button>
-          <button id="soundButton" type="button" aria-pressed="true" title="Toggle game sound">SOUND ON</button>
+          <button id="soundButton" type="button" aria-pressed="true" title="Toggle game sound">SOUND</button>
           <button id="helpButton" class="icon-button" type="button" title="Open controls" aria-label="Open controls">
             ?
           </button>
@@ -37,37 +48,52 @@
         <div class="health-readout">
           <span class="status-label">VITALS</span>
           <div class="health-track" aria-hidden="true"><span id="healthFill"></span></div>
-          <strong id="healthText">32/32</strong>
+          <strong id="healthText">--/--</strong>
         </div>
-        <div class="status-cell"><span class="status-label">FLOOR</span><strong id="floorValue">1/6</strong></div>
-        <div class="status-cell status-wide"><span class="status-label">WEAPON</span><strong id="weaponValue">Arc Needle</strong></div>
-        <div class="status-cell"><span class="status-label">POWER</span><strong id="damageValue">4-7</strong></div>
-        <div class="status-cell"><span class="status-label">RANGE</span><strong id="rangeValue">5</strong></div>
-        <div class="status-cell"><span class="status-label">AMMO</span><strong id="ammoValue">8/28</strong></div>
-        <div class="status-cell"><span class="status-label">ARMOR</span><strong id="armorValue">0</strong></div>
-        <div class="status-cell"><span class="status-label">PULSES</span><strong id="pulseValue">2</strong></div>
-        <div class="status-cell"><span class="status-label">CREDITS</span><strong id="creditsValue">0</strong></div>
-        <div class="status-cell"><span class="status-label">LEVEL</span><strong id="levelValue">1</strong></div>
+        <div class="status-cell"><span class="status-label">FLOOR</span><strong id="floorValue">--</strong></div>
+        <div class="status-cell status-wide"><span class="status-label">OPERATOR</span><strong id="characterValue">SELECT</strong></div>
+        <div class="status-cell status-wide"><span class="status-label">WEAPON</span><strong id="weaponValue">--</strong></div>
+        <div class="status-cell"><span class="status-label">POWER</span><strong id="damageValue">--</strong></div>
+        <div class="status-cell"><span class="status-label">RANGE</span><strong id="rangeValue">--</strong></div>
+        <div class="status-cell"><span class="status-label">AMMO</span><strong id="ammoValue">--</strong></div>
+        <div class="status-cell"><span class="status-label">ARMOR</span><strong id="armorValue">--</strong></div>
+        <div class="status-cell"><span class="status-label">PULSES</span><strong id="pulseValue">--</strong></div>
+        <div class="status-cell token-cell"><span class="status-label">VAULT TOKENS</span><strong id="tokensValue">180</strong></div>
+        <div class="status-cell"><span class="status-label">LEVEL</span><strong id="levelValue">--</strong></div>
       </section>
 
       <section class="workspace">
         <div class="stage" aria-label="Riftward game board">
           <canvas id="game" width="960" height="640" tabindex="0" aria-label="Isometric dungeon map"></canvas>
           <div class="stage-caption">
-            <span id="sectorName">Glassroot Gate</span>
-            <span id="modeLabel">MANUAL</span>
+            <span id="sectorName">Awaiting assignment</span>
+            <span id="modeLabel">ROSTER</span>
           </div>
+
+          <div id="gatePrompt" class="gate-prompt" hidden>
+            <span class="gate-prompt-signal" aria-hidden="true"></span>
+            <span>
+              <small>SECTOR CLEAR</small>
+              <strong id="gatePromptText">Press G to load the next floor</strong>
+            </span>
+            <button id="nextFloorButton" type="button">NEXT FLOOR</button>
+          </div>
+
           <div id="overlay" class="overlay">
-            <div class="overlay-card">
-              <p id="overlayEyebrow" class="overlay-eyebrow">EXPEDITION BRIEF</p>
-              <h1 id="overlayTitle">The vault is awake.</h1>
+            <div class="overlay-card roster-overlay">
+              <p id="overlayEyebrow" class="overlay-eyebrow">RIFTWALKER ROSTER</p>
+              <h1 id="overlayTitle">Choose your operator.</h1>
               <p id="overlayText">
-                Cartographer Mara Venn must descend through the living archive beneath Aster Vale,
-                recover its memory seeds, and stop the Hollow Engine before it rewrites the surface.
+                Five specialists are linked to the Echo Vault. Select a class, review its starting
+                gear, and begin the descent.
               </p>
+
+              <div id="characterRoster" class="character-roster" aria-label="Character selection"></div>
+              <div id="selectionSummary" class="selection-summary" aria-live="polite"></div>
               <div id="overlayStats" class="overlay-stats" hidden></div>
+
               <div class="overlay-actions">
-                <button id="primaryOverlayButton" type="button">BEGIN DESCENT</button>
+                <button id="primaryOverlayButton" type="button">START EXPEDITION</button>
                 <button id="secondaryOverlayButton" class="secondary-button" type="button">CONTROLS</button>
               </div>
             </div>
@@ -77,14 +103,35 @@
         <aside class="field-panel" aria-label="Expedition information">
           <div class="objective-block">
             <p class="panel-kicker">CURRENT OBJECTIVE</p>
-            <h2 id="objectiveTitle">Clear the sector</h2>
-            <p id="objectiveText">Defeat the wardens and locate the descent gate.</p>
+            <h2 id="objectiveTitle">Choose a Riftwalker</h2>
+            <p id="objectiveText">Select one of five operators to begin.</p>
             <div class="objective-meta">
               <span>TURN <strong id="turnValue">0</strong></span>
               <span>KILLS <strong id="killsValue">0</strong></span>
-              <span>SCORE <strong id="scoreValue">0</strong></span>
+              <span>FLOOR SCORE <strong id="floorScoreValue">0</strong></span>
+              <span>RANK <strong id="rankValue">D</strong></span>
             </div>
           </div>
+
+          <div class="live-score" aria-label="Live score board">
+            <div>
+              <p class="panel-kicker">RUN SCORE</p>
+              <strong id="scoreValue">0</strong>
+            </div>
+            <div>
+              <span>COMBO</span>
+              <strong id="comboValue">x1.00</strong>
+            </div>
+            <div>
+              <span>BEST</span>
+              <strong id="bestScoreValue">0</strong>
+            </div>
+            <div>
+              <span>TOKENS EARNED</span>
+              <strong id="tokensEarnedValue">0</strong>
+            </div>
+          </div>
+
           <div class="log-block">
             <div class="panel-heading">
               <p class="panel-kicker">FIELD LOG</p>
@@ -96,12 +143,24 @@
       </section>
 
       <section class="action-bar" aria-label="Actions">
-        <button type="button" data-action="shoot"><kbd>SPACE</kbd><span>Shoot</span></button>
-        <button type="button" data-action="pulse"><kbd>Q</kbd><span>Echo pulse</span></button>
-        <button type="button" data-action="medkit"><kbd>H</kbd><span>Use patch</span></button>
-        <button type="button" data-action="reload"><kbd>R</kbd><span>Reload</span></button>
-        <button type="button" data-action="interact"><kbd>E</kbd><span>Enter gate</span></button>
-        <button type="button" data-action="wait"><kbd>X</kbd><span>Wait</span></button>
+        <button type="button" data-action="shoot" title="Shoot nearest visible enemy">
+          <kbd>1</kbd><span>Shoot</span><small>Space / F</small>
+        </button>
+        <button type="button" data-action="pulse" title="Damage and stun nearby enemies">
+          <kbd>2</kbd><span>Echo pulse</span><small>Q</small>
+        </button>
+        <button type="button" data-action="medkit" title="Use a healing patch">
+          <kbd>3</kbd><span>Use patch</span><small>H</small>
+        </button>
+        <button type="button" data-action="reload" title="Reload the current weapon">
+          <kbd>4</kbd><span>Reload</span><small>R</small>
+        </button>
+        <button id="gateActionButton" type="button" data-action="interact" title="Load the next floor after clearing the sector">
+          <kbd>G</kbd><span>Next floor</span><small>E</small>
+        </button>
+        <button type="button" data-action="shop" title="Open the field shop">
+          <kbd>B</kbd><span>Field shop</span><small>Weapons</small>
+        </button>
       </section>
 
       <section class="touch-controls" aria-label="Touch controls">
@@ -115,7 +174,9 @@
           <button type="button" data-action="shoot">SHOOT</button>
           <button type="button" data-action="pulse">PULSE</button>
           <button type="button" data-action="medkit">PATCH</button>
-          <button type="button" data-action="interact">GATE</button>
+          <button type="button" data-action="reload">RELOAD</button>
+          <button type="button" data-action="shop">SHOP</button>
+          <button type="button" data-action="interact">NEXT</button>
         </div>
       </section>
     </main>
@@ -124,24 +185,69 @@
       <div class="dialog-heading">
         <div>
           <p class="panel-kicker">FIELD MANUAL</p>
-          <h2>How to survive the Echo Vault</h2>
+          <h2>Riftward controls</h2>
         </div>
         <button id="closeHelpButton" class="icon-button" type="button" aria-label="Close controls" title="Close controls">X</button>
       </div>
       <div class="help-grid">
-        <p><kbd>WASD</kbd> or <kbd>ARROWS</kbd><span>Move one isometric tile and advance the enemy turn.</span></p>
-        <p><kbd>SPACE</kbd><span>Fire at the nearest visible enemy. You can also click an enemy.</span></p>
-        <p><kbd>Q</kbd><span>Spend a pulse charge to damage and stun nearby enemies.</span></p>
-        <p><kbd>H</kbd><span>Use a field patch to recover health.</span></p>
-        <p><kbd>R</kbd><span>Reload your weapon from reserve ammunition.</span></p>
-        <p><kbd>E</kbd><span>Descend when standing on an unlocked gate.</span></p>
+        <p><kbd>WASD</kbd><span>Move one tile. Arrow keys work too.</span></p>
+        <p><kbd>1</kbd><span>Shoot the nearest visible enemy. Space and F also fire.</span></p>
+        <p><kbd>2</kbd><span>Use an Echo pulse. Q is the alternate key.</span></p>
+        <p><kbd>3</kbd><span>Use a field patch. H is the alternate key.</span></p>
+        <p><kbd>4</kbd><span>Reload the current weapon. R is the alternate key.</span></p>
+        <p><kbd>G</kbd><span>Load the next floor from anywhere after the sector is clear. E also works.</span></p>
+        <p><kbd>B</kbd><span>Open the field shop to buy or equip weapons and supplies.</span></p>
+        <p><kbd>TAB</kbd><span>Open the persistent score board and run statistics.</span></p>
+        <p><kbd>M</kbd><span>Toggle automatic route mode.</span></p>
         <p><kbd>X</kbd><span>Wait one turn without moving.</span></p>
-        <p><kbd>CLICK</kbd><span>Choose a visible tile or target. The game takes one step toward it.</span></p>
+        <p><kbd>CLICK</kbd><span>Move toward a visible tile, shoot an enemy, or activate the gold gate.</span></p>
+        <p><kbd>ESC</kbd><span>Close the shop, score board, or controls.</span></p>
       </div>
-      <p class="help-note">Every move is a turn. Use cover to break line of sight, collect supplies, and upgrade before the final floor.</p>
+      <p class="help-note">
+        Every combat action is one turn. Kills award score and persistent Vault Tokens. A cleared
+        sector never requires walking back to the gate: press G or use NEXT FLOOR.
+      </p>
+    </dialog>
+
+    <dialog id="shopDialog" class="wide-dialog">
+      <div class="dialog-heading shop-heading">
+        <div>
+          <p class="panel-kicker">QUARTERMASTER LINK</p>
+          <h2>Field shop</h2>
+          <p>Purchased weapons remain unlocked for future expeditions.</p>
+        </div>
+        <div class="dialog-balance">
+          <span>VAULT TOKENS</span>
+          <strong id="shopTokensValue">0</strong>
+        </div>
+        <button id="closeShopButton" class="icon-button" type="button" aria-label="Close shop" title="Close shop">X</button>
+      </div>
+      <div class="shop-tabs" role="tablist" aria-label="Shop sections">
+        <button id="weaponsTabButton" type="button" role="tab" aria-selected="true">WEAPONS</button>
+        <button id="suppliesTabButton" type="button" role="tab" aria-selected="false">SUPPLIES</button>
+      </div>
+      <div id="shopGrid" class="shop-grid"></div>
+      <p id="shopMessage" class="shop-message" aria-live="polite"></p>
+    </dialog>
+
+    <dialog id="scoreDialog">
+      <div class="dialog-heading">
+        <div>
+          <p class="panel-kicker">RIFTWARD ARCHIVE</p>
+          <h2>Score board</h2>
+        </div>
+        <button id="closeScoreButton" class="icon-button" type="button" aria-label="Close score board" title="Close score board">X</button>
+      </div>
+      <div id="currentRunScore" class="current-run-score"></div>
+      <div class="score-table-heading">
+        <span>TOP RUNS</span>
+        <button id="resetScoresButton" type="button">RESET SCORES</button>
+      </div>
+      <ol id="highScoreList" class="high-score-list"></ol>
     </dialog>
 
     <script src="src/engine.js"></script>
+    <script src="src/catalog.js"></script>
     <script src="src/main.js"></script>
   </body>
 </html>

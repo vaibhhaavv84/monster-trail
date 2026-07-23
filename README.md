@@ -1,8 +1,8 @@
 # Riftward
 
-Riftward is an original isometric, turn-based dungeon roguelike. It takes inspiration from the readable tactical rhythm of classic browser roguelikes while using its own setting, characters, enemies, artwork, story, map generator, and code.
+Riftward is an original isometric, turn-based dungeon roguelike. It uses its own setting, operators, enemies, artwork, story, map generator, and code.
 
-You play Mara Venn, a cartographer descending through the living Echo Vault beneath Aster Vale. Clear procedurally generated sectors, collect supplies, upgrade your weapon, and seal the Hollow Engine on the final floor.
+Choose one of five Riftwalkers, descend through the living Echo Vault beneath Aster Vale, and seal the Hollow Engine. Each operator has different health, armor, gear, and combat bonuses. Defeated enemies award score and persistent Vault Tokens that can be spent on weapons and supplies.
 
 ## Play
 
@@ -23,11 +23,14 @@ Then open `http://127.0.0.1:4317`.
 | Action | Control |
 | --- | --- |
 | Move one tile | Arrow keys or WASD |
-| Shoot nearest visible enemy | Space |
-| Echo pulse | Q |
-| Use field patch | H |
-| Reload | R |
-| Enter an unlocked gate | E |
+| Shoot nearest visible enemy | 1, Space, or F |
+| Echo pulse | 2 or Q |
+| Use field patch | 3 or H |
+| Reload | 4 or R |
+| Load the next cleared floor | G or E |
+| Open the field shop | B |
+| Open the score board | Tab |
+| Toggle sound | M |
 | Wait one turn | X |
 | Move or target | Click a visible tile or enemy |
 
@@ -35,15 +38,20 @@ Touch controls appear on smaller screens.
 
 ## Game Loop
 
+- Five selectable Riftwalkers with distinct stats, perks, silhouettes, and starter weapons
 - Procedurally generated isometric rooms and corridors
 - Tile-by-tile movement where every action advances enemy turns
 - Melee and ranged enemies with cover and line-of-sight rules
-- Ammunition, armor, healing, pulse gadgets, credits, and weapon upgrades
+- Nine weapons with burst, critical, close-range, splash, and boss-hunter traits
+- Persistent Vault Tokens, permanent weapon unlocks, and an in-run supply shop
+- Kill score, floor score, combo multipliers, ranks, and a persistent top-five score board
+- Ammunition, armor, healing patches, pulse gadgets, and level upgrades
 - Fog-of-war exploration and a live field log
 - Six-floor main expedition with a final boss
 - Three-floor high-risk side route
 - Optional automatic route mode
-- Original canvas-drawn characters and effects
+- Floor recall from anywhere after a sector is cleared; no walk back to the gate is required
+- Original canvas-drawn characters, enemies, maps, and effects
 
 ## Project Structure
 
@@ -54,6 +62,7 @@ monster-trail/
 |   |-- serve.mjs
 |   `-- smoke-test.mjs
 |-- src/
+|   |-- catalog.js
 |   |-- engine.js
 |   |-- main.js
 |   `-- styles.css
@@ -69,7 +78,7 @@ monster-trail/
 npm.cmd test
 ```
 
-The test checks deterministic generation, path connectivity, combat systems, boss progression, responsive controls, launcher behavior, and deployment structure.
+The test checks deterministic generation, path connectivity, all five operators, the weapon economy, scoring and token systems, floor progression, responsive controls, launcher behavior, and deployment structure.
 
 ## License
 
