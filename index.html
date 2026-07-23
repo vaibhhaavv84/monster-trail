@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Monster Trail</title>
+    <link rel="stylesheet" href="src/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="game-frame" aria-label="Monster Trail game">
+        <canvas id="game" width="960" height="640"></canvas>
+        <div id="dialog" class="dialog hidden" role="status" aria-live="polite"></div>
+      </section>
+      <aside class="panel">
+        <div>
+          <p class="eyebrow">Monster Trail</p>
+          <h1>Leafport Route</h1>
+          <p class="summary">Explore the grass road, meet villagers, and battle wild companions in a classic top-down 2D adventure.</p>
+        </div>
+        <div class="controls">
+          <p><strong>Move</strong> Arrow keys or WASD</p>
+          <p><strong>Talk / Inspect</strong> Space or Enter</p>
+          <p><strong>Battle</strong> Use the menu keys shown on screen</p>
+        </div>
+        <div id="party" class="party"></div>
+      </aside>
+    </main>
+    <script src="src/main.js"></script>
+  </body>
+</html>

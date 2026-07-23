@@ -1,0 +1,18 @@
+{
+  "name": "monster-trail",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Original top-down 2D monster adventure browser game prototype.",
+  "scripts": {
+    "start": "node scripts/serve.mjs",
+    "dev": "node scripts/serve.mjs",
+    "test": "node scripts/smoke-test.mjs"
+  },
+  "keywords": [
+    "browser-game",
+    "monster-adventure",
+    "canvas",
+    "rpg"
+  ],
+  "license": "MIT"
+}
